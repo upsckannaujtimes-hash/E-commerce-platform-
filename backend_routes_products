@@ -1,0 +1,133 @@
+import express from 'express';
+import Product from '../models/Product.js';
+import { protect, authorize } from '../middleware/auth.js';
+
+const router = express.Router();
+
+// Get all products
+router.get('/', async (req, res) => {
+  try {
+    const { category, search } = req.query;
+    let query = {};
+
+    if (category) query.category = category;
+    if (search) query.name = { $regex: search, $options:  'i' };
+
+    const products = await Product.find(query).populate('seller', 'username shopName');
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: error. message });
+  }
+});
+
+// Get single product
+router.get('/:id', async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id)
+      .populate('seller', 'username shopName shopDescription')
+      .populate('reviews. buyer', 'username');
+    
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    
+    res.json(product);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Create product (sellers only)
+router.post('/', protect, authorize('seller'), async (req, res) => {
+  try {
+    const { name, description, price, category, image, stock } = req.body;
+
+    const product = new Product({
+      name,
+      description,
+      price,
+      category,
+      image,
+      stock,
+      seller: req.user. id
+    });
+
+    await product.save();
+    await product.populate('seller', 'username shopName');
+
+    res.status(201).json(product);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update product (seller only)
+router.put('/:id', protect, authorize('seller'), async (req, res) => {
+  try {
+    let product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    if (product.seller.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Not authorized to update this product' });
+    }
+
+    product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(product);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete product (seller only)
+router.delete('/:id', protect, authorize('seller'), async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    if (product.seller.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Not authorized to delete this product' });
+    }
+
+    await Product.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Product deleted' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Add review
+router.post('/:id/review', protect, authorize('buyer'), async (req, res) => {
+  try {
+    const { rating, comment } = req.body;
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const review = {
+      buyer: req.user. id,
+      rating,
+      comment,
+      createdAt:  new Date()
+    };
+
+    product.reviews.push(review);
+    product.rating = (product.reviews.reduce((acc, r) => acc + r.rating, 0) / product.reviews.length).toFixed(1);
+    
+    await product.save();
+    await product.populate('reviews.buyer', 'username');
+
+    res.json(product);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+export default router;

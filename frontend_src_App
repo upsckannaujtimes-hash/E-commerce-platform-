@@ -1,0 +1,49 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import Navbar from './components/Navbar';
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import ProductDetail from './pages/ProductDetail';
+import Dashboard from './pages/Dashboard';
+import CreateProduct from './pages/CreateProduct';
+import Cart from './pages/Cart';
+import SellerShop from './pages/SellerShop';
+
+function App() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('user');
+    if (token && userData) {
+      setUser(JSON.parse(userData));
+    }
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  }
+
+  return (
+    <Router>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar user={user} setUser={setUser} />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={user ? <Navigate to="/" /> : <Login setUser={setUser} />} />
+          <Route path="/register" element={user ? <Navigate to="/" /> : <Register setUser={setUser} />} />
+          <Route path="/product/:id" element={<ProductDetail user={user} />} />
+          <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
+          <Route path="/create-product" element={user && user.role === 'seller' ?  <CreateProduct /> : <Navigate to="/" />} />
+          <Route path="/cart" element={<Cart user={user} />} />
+          <Route path="/seller/: sellerId" element={<SellerShop />} />
+        </Routes>
+      </div>
+    </Router>
+  );
+}
+
+export default App;
